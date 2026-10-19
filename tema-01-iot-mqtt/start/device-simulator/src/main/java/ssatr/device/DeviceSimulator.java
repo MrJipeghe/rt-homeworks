@@ -1,5 +1,7 @@
 package ssatr.device;
 
+import ssatr.service.MqttConnection;
+
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 

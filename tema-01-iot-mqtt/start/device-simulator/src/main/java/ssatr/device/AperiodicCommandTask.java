@@ -1,5 +1,7 @@
 package ssatr.device;
 
+import ssatr.service.MqttConnection;
+
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -37,14 +39,43 @@ public class AperiodicCommandTask implements Runnable {
 
     @Override
     public void run() {
-        // TODO 3: implementați taskul aperiodic:
-        //   - preluați comenzile din coadă: commands.take()
-        //   - separați numele comenzii de parametru: command.split(" ")
-        //   - executați comanda (periodic.setPeriodMs(...), sensor.reset() etc.)
-        //   - publicați confirmarea pe Config.statusTopic(deviceId)
-        //   - o comandă necunoscută sau un parametru invalid nu trebuie să
-        //     oprească taskul: publicați "ERROR <motiv>"
-        //
-        // Vezi exemplul exemple/01-taskuri/.../AperiodicTaskExample.java
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                String commandStr = commands.take();
+                String[] parts = commandStr.split(" ");
+                String cmd = parts[0];
+                long now = System.currentTimeMillis();
+                String responseText = "OK " + commandStr;
+
+                try {
+                    switch (cmd) {
+                        case "SET_INTERVAL":
+                            periodic.setPeriodMs(Long.parseLong(parts[1]));
+                            break;
+                        case "SET_THRESHOLD":
+                            periodic.setThreshold(Double.parseDouble(parts[1]));
+                            break;
+                        case "RESET":
+                            sensor.reset();
+                            break;
+                        case "STATUS":
+                            responseText = String.format(java.util.Locale.US, "OK PERIOD=%d THRESHOLD=%.2f",
+                                    periodic.getPeriodMs(), periodic.getThreshold());
+                            break;
+                        default:
+                            responseText = "ERROR Comandă necunoscută: " + cmd;
+                    }
+                } catch (Exception e) {
+                    responseText = "ERROR Parametri incorecți pentru: " + cmd;
+                }
+
+                String payload = String.format(java.util.Locale.US, "%s;%d;%s", deviceId, now, responseText);
+                mqtt.publish(Config.statusTopic(deviceId), payload);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
     }
 }

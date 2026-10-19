@@ -1,5 +1,7 @@
 package ssatr.device;
 
+import ssatr.service.MqttConnection;
+
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -31,22 +33,31 @@ public class PeriodicTelemetryTask implements Runnable {
 
     @Override
     public void run() {
-        // TODO 1: implementați bucla taskului periodic. Fiecare job:
-        //   - citiți temperatura: sensor.read()
-        //   - publicați pe Config.telemetryTopic(deviceId) mesajul "deviceId;timestamp;temperatura"
-        //     (timestamp = System.currentTimeMillis(); temperatura cu punct zecimal,
-        //      de ex. String.format(Locale.US, "%.2f", t), ca să poată fi citită
-        //      cu Double.parseDouble în business-service)
-        //   - dacă temperatura > threshold, puneți valoarea în coada alarmEvents
-        //
-        // Folosiți așteptare absolută, nu relativă: Thread.sleep(periodMs) după
-        // fiecare job duce la derivă (perioada reală devine T + C + întârzieri).
-        // Calculați eliberarea următorului job pe grilă (next = next + periodMs)
-        // și așteptați doar cât a mai rămas până la ea. Pentru grilă folosiți
-        // un timp monoton: System.nanoTime().
-        //
-        // periodMs se poate schimba în timpul rulării (comanda SET_INTERVAL),
-        // deci citiți-l la fiecare job.
+        long nextReleaseNanos = System.nanoTime();
+
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                double temp = sensor.read();
+                long now = System.currentTimeMillis();
+
+                String payload = String.format(java.util.Locale.US, "%s;%d;%.2f", deviceId, now, temp);
+                mqtt.publish(Config.telemetryTopic(deviceId), payload);
+
+                if (temp > threshold) {
+                    alarmEvents.offer(temp);
+                }
+
+                nextReleaseNanos += periodMs * 1_000_000L;
+                long sleepNanos = nextReleaseNanos - System.nanoTime();
+
+                if (sleepNanos > 0) {
+                    Thread.sleep(sleepNanos / 1_000_000L, (int) (sleepNanos % 1_000_000L));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
     }
 
     public void setPeriodMs(long periodMs) {

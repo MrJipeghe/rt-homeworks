@@ -27,12 +27,38 @@ public class MessageProcessor implements Runnable {
 
     @Override
     public void run() {
-        // TODO 4: într-o buclă:
-        //   - preluați un mesaj: inbox.take()
-        //   - salvați mesajul în fișierul CSV: storage.append(kind, mesaj)
-        //     (CsvStorage este gata implementată)
-        //   - actualizați dashboard-ul, în funcție de kind
-        //   - alarmele și confirmările se afișează imediat în consolă
-        //   - un mesaj greșit (format invalid) nu trebuie să oprească thread-ul
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                String message = inbox.take();
+                storage.append(kind, message);
+
+                String[] parts = message.split(";");
+                if (parts.length < 3) continue; // mesaj invalid, trecem mai departe
+
+                String deviceId = parts[0];
+                long timestamp = Long.parseLong(parts[1]);
+
+                switch (kind) {
+                    case "telemetry":
+                        dashboard.updateTelemetry(deviceId, timestamp, parts[2]);
+                        break;
+                    case "alarm":
+                        dashboard.updateAlarm(deviceId, timestamp);
+                        System.out.println("ALARMĂ PRIMITĂ de la " + deviceId + ": Temp=" + parts[2] + " Prag=" + parts[3]);
+                        break;
+                    case "status":
+                        dashboard.updateStatus(deviceId, timestamp);
+                        System.out.println("STATUS PRIMIT de la " + deviceId + ": " + parts[2]);
+                        break;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                // Dacă apare o eroare de format (ex: parseLong dă fail),
+                // nu oprim thread-ul, o ignorăm
+                System.out.println("Eroare la procesare mesaj (" + kind + "): " + e.getMessage());
+            }
+        }
     }
 }
