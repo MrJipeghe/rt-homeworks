@@ -1,7 +1,5 @@
 package ssatr.service;
 
-import java.util.Scanner;
-
 /**
  * Consola operatorului: citește comenzi de la tastatură.
  *
@@ -11,48 +9,16 @@ import java.util.Scanner;
  *   help                               afișează comenzile
  *   exit                               oprește serviciul
  */
-public class CommandConsole implements Runnable {
-
-    private final MqttConnection mqtt;
-    private final Dashboard dashboard;
-
-    public CommandConsole(MqttConnection mqtt, Dashboard dashboard) {
-        this.mqtt = mqtt;
-        this.dashboard = dashboard;
+public class CommandConsole implements Runnaprivate void sendCommand(String line) {
+    int spaceIndex = line.indexOf(' ');
+    if (spaceIndex == -1) {
+        System.out.println("Eroare format: <deviceId> <COMANDA> [parametru]");
+        return;
     }
 
-    @Override
-    public void run() {
-        Scanner scanner = new Scanner(System.in);
-        printHelp();
+    String deviceId = line.substring(0, spaceIndex);
+    String command = line.substring(spaceIndex + 1);
 
-        while (scanner.hasNextLine()) {
-            String line = scanner.nextLine().trim();
-
-            if (line.isEmpty()) {
-                continue;
-            } else if (line.equals("exit")) {
-                break;
-            } else if (line.equals("help")) {
-                printHelp();
-            } else if (line.equals("show")) {
-                dashboard.print();
-            } else {
-                sendCommand(line);
-            }
-        }
-    }
-
-    private void sendCommand(String line) {
-        // TODO 6: separați deviceId de restul liniei
-        //   ("device-1 SET_INTERVAL 1000" -> "device-1" și "SET_INTERVAL 1000")
-        //   și publicați comanda pe Config.commandTopic(deviceId).
-        //   Afișați un mesaj de eroare dacă linia nu are formatul corect.
-        System.out.println("(trimiterea comenzilor neimplementată): " + line);
-    }
-
-    private void printHelp() {
-        System.out.println("Comenzi: show | <deviceId> SET_INTERVAL <ms> | <deviceId> SET_THRESHOLD <valoare>");
-        System.out.println("         <deviceId> RESET | <deviceId> STATUS | help | exit");
-    }
+    mqtt.publish(Config.commandTopic(deviceId), command);
+    System.out.println("Comanda trimisa: '" + command + "' catre " + deviceId);
 }
